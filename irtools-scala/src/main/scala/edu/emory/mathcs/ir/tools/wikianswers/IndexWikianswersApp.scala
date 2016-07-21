@@ -1,16 +1,16 @@
-package edu.emory.mathcs.ir.tools
+package edu.emory.mathcs.ir.tools.wikianswers
 
 import java.nio.file.Paths
 
 import org.apache.lucene.analysis.Analyzer
-
-import scala.collection.JavaConverters._
 import org.apache.lucene.analysis.core.KeywordAnalyzer
 import org.apache.lucene.analysis.en.EnglishAnalyzer
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.document._
 import org.apache.lucene.index.{IndexWriter, IndexWriterConfig}
 import org.apache.lucene.store.FSDirectory
+
+import scala.collection.JavaConverters._
 
 /**
   * Created by dsavenk on 7/21/16.
@@ -45,9 +45,9 @@ object IndexWikianswersApp {
 
   def indexCluster(indexWriter: IndexWriter, questionCluster: Array[Array[String]]): Unit = {
     clusterCounter += 1
-    val answers = questionCluster.filter(_(0) == "a").map(_(1))
+    val answers = questionCluster.filter(answer => answer.length == 2 && answer(0) == "a").map(_(1))
 
-    questionCluster.filter(_(0) == "q").map(_(1)).foreach { question =>
+    questionCluster.filter(question => question.length == 2 && question(0) == "q").map(_(1)).foreach { question =>
       questionCounter += 1
       val doc = new Document()
       doc.add(new TextField("question", question, Field.Store.YES))
