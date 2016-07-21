@@ -26,7 +26,7 @@ object IndexWikianswersApp {
   var questionCounter = 0
 
   def main(args: Array[String]): Unit = {
-    val indexDirectory = FSDirectory.open(Paths.get(args(1)))
+    val indexDirectory = FSDirectory.open(Paths.get(args(0)))
     val writer = new IndexWriter(indexDirectory, indexConfig)
 
     try {
@@ -56,5 +56,7 @@ object IndexWikianswersApp {
       answers.foreach(answer => doc.add(new TextField("answer", answer, Field.Store.YES)))
       indexWriter.addDocument(doc)
     }
+    if (clusterCounter % 1000 == 0)
+        System.err.println(s"$clusterCounter clusters indexed")
   }
 }
