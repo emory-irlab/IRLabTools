@@ -35,7 +35,7 @@ object EntityPairPhrasesIndexerApp {
       var line: String = scala.io.StdIn.readLine()
 
       while (line != null) {
-        val (doc, mid1, name1, mid2, name2, phrase) = line.split("\t")
+        val Array(doc, mid1, name1, mid2, name2, phrase) = line.split("\t")
 
         indexPhrase(writer, EntityPairPhrase(doc, mid1, name1, mid2, name2, phrase))
         line = scala.io.StdIn.readLine()
@@ -51,10 +51,10 @@ object EntityPairPhrasesIndexerApp {
     val doc = new Document()
     doc.add(new TextField("phrase", phrase.phrase, Field.Store.YES))
     doc.add(new Field("doc", phrase.doc, StoredField.TYPE))
-    doc.add(new Field("mid", phrase.mid1, StoredField.TYPE))
-    doc.add(new Field("name", phrase.name1, StoredField.TYPE))
-    doc.add(new Field("mid", phrase.mid2, StoredField.TYPE))
-    doc.add(new Field("name", phrase.name2, StoredField.TYPE))
+    doc.add(new Field("mid", phrase.mid1, StringField.TYPE_STORED))
+    doc.add(new Field("name", phrase.name1, StringField.TYPE_STORED))
+    doc.add(new Field("mid", phrase.mid2, StringField.TYPE_STORED))
+    doc.add(new Field("name", phrase.name2, StringField.TYPE_STORED))
     indexWriter.addDocument(doc)
 
     if (phraseCounter % 1000 == 0)
