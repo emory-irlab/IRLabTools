@@ -1,9 +1,10 @@
 package edu.emory.mathcs.ir.tools.trecqa
 
-import edu.emory.mathcs.ir.tools.entity.{EntityMention, TagMeWikifier}
-import nl.flotsam.xeger.Xeger
+import java.io.{File, PrintWriter}
 
-case class Question(id: String, text: String)
+import edu.emory.mathcs.ir.tools.entity.{EntityMention, TagMeWikifier}
+import edu.emory.mathcs.ir.utils.{AnnotatedQuestion, QuestionUtils}
+import nl.flotsam.xeger.Xeger
 
 
 /**
@@ -19,17 +20,28 @@ object EntityLinkAnswers {
     }.toMap
   }
 
-  def readPatterns(file: String): Map[String, List[String]] = {
+  def readPrunedQuestions(file: String): Set[String] = {
+    scala.io.Source.fromFile(file).getLines().map(_.split("\t").head).toSet
+  }
+
+  def readPatterns(file: String): Map[String, Set[String]] = {
     scala.io.Source.fromFile(file).getLines().map {
       line =>
         val fields = line.split("\\s+")
         fields(0) -> fields.slice(1, fields.length).mkString(" ")
-    }.toList.groupBy(_._1).mapValues(_.flatMap(pattern => extendPattern(pattern._2)))
+    }.toList.groupBy(_._1).mapValues(_.flatMap(pattern => extendPattern(pattern._2)).toSet).toMap
   }
 
   def extendPattern(pattern: String): Set[String] = {
-    try {
-      val xeger = new Xeger(pattern)
+    val res = pattern.replace(".*?", " ")
+      .replace("\\s", " ")
+      .replace(".*", " ")
+      .replace("?:", "")
+      .replace("+", "")
+      .replace("*", "")
+      .replace("\"", "\\\"")
+    val extendedPatterns = try {
+      val xeger = new Xeger(res)
       (0 to 10).map(i => xeger.generate()).toSet
     } catch {
       case e: StackOverflowError =>
@@ -39,34 +51,83 @@ object EntityLinkAnswers {
         System.err.println(e)
         Set(pattern)
     }
+
+    extendedPatterns.filter(_.nonEmpty)
   }
 
-  def getQuestionAnswerEntityMentions(trainPatterns: Map[String, Set[String]], id: String, question: String): (Array[EntityMention], Array[EntityMention]) = {
-    val answerPatterns = trainPatterns(id).mkString("\t")
-    val questionWithAnswers = question + "\t" + answerPatterns
+  /**
+    * Filter out questions that either ask for number (how many, population) or date (when). Also filter out questions,
+    * that only contain patterns, that start with a number.
+    * @param question Question text
+    * @param patterns Answer patterns
+    * @return True if we should keep the question
+    */
+  def filterQuestions(question: String, patterns: Set[String]): Boolean = {
+    QuestionUtils.filterFactoidQuestions(question) && patterns.map(_.charAt(0)).exists(Character.isAlphabetic(_))
+  }
+
+  def getQuestionAnswerEntityMentions(question: String, patterns: Set[String]): (Array[EntityMention], Array[EntityMention]) = {
+    val answerPatterns = patterns.mkString(", ")
+    val questionWithAnswers = question + "? " + answerPatterns
     val mentions = TagMeWikifier.getEntityMentions(questionWithAnswers)
     val (questionMentions, answerMentions) = mentions.partition(_.start < question.length)
-    (questionMentions, answerMentions)
+    (questionMentions, answerMentions.filter(mention => patterns.contains(questionWithAnswers.substring(mention.start, mention.end))))
   }
 
   def main(args: Array[String]): Unit = {
-    val trainQuestions = readQuestions(args(0))
-    val testQuestions = readQuestions(args(1))
-    val trainPatterns = readPatterns(args(2)).mapValues(_.toSet)
-    val testPatterns = (readPatterns(args(3)).toSeq ++ readPatterns(args(4)).toSeq).groupBy(_._1)
-      .mapValues(_.flatMap(_._2).toList).mapValues(_.toSet)
+    val questions = readQuestions(args(0))
+    val patterns = readPatterns(args(1))
+    val prunedQuestions = readPrunedQuestions(args(2))
 
-    val trainEntityMentions = trainQuestions.map {
-      case (id, question) =>
-        id -> getQuestionAnswerEntityMentions(trainPatterns, id, question)
+    val (keptQuestions, removedQuestions) = questions
+        .map(kv => kv._1 -> (kv._2, patterns(kv._1)))
+      .partition {
+        case (id, (question, pattern)) =>
+          //filterQuestions(question, pattern)
+          prunedQuestions.contains(question)
+      }
+
+    val questionWithMentions = keptQuestions map {
+      case (id, (question, pattern)) =>
+        val (questionMentions, answerMentions) = getQuestionAnswerEntityMentions(question, pattern)
+        AnnotatedQuestion(id, question, pattern.toArray, questionMentions, answerMentions)
     }
 
-    val testEntityMentions = testQuestions.map {
-      case (id, question) =>
-        id -> getQuestionAnswerEntityMentions(testPatterns, id, question)
-    }
 
-    println(trainEntityMentions)
+    val out = new PrintWriter(new File(args(3)))
+
+    out.println("[")
+    for (annotatedQuestion <- questionWithMentions.filter(_.answerEntity.nonEmpty)) {
+      out.println("  {")
+      out.println("  \"id\":" + annotatedQuestion.id + ",")
+      out.println("  \"utterance\": \"" + annotatedQuestion.question.replace("\"", "\\\"") + "\",")
+//      out.println("  \"patterns\": [")
+//      for (pattern <- annotatedQuestion.patterns) {
+//        out.println("    \"" + pattern + "\", ")
+//      }
+//      out.println("  ],")
+//      out.println("  \"question_entities\": [")
+//      for (entity <- annotatedQuestion.questionEntity) {
+//        out.println("    {")
+//        out.println("      \"name\": \"" + entity.entity + "\",")
+//        out.println("      \"score\": " + entity.rho)
+//        out.println("    }, ")
+//      }
+//      out.println("  ],")
+      out.println("  \"result\": [")
+      for (entity: String <- annotatedQuestion.answerEntity.map(_.entity).toSet) {
+        out.println("    \"" + entity.replace("\"", "\\\"") + "\",")
+//        out.println("    {")
+//        out.println("      \"name\": \"" + entity.entity + "\",")
+//        out.println("      \"start\": " + entity.start + "\",")
+//        out.println("      \"end\": " + entity.end + ",")
+//        out.println("      \"score\": " + entity.rho)
+//        out.println("    }, ")
+      }
+      out.println("  ]")
+      out.println("  },")
+    }
+    out.println("]")
+    out.close()
   }
-
 }
