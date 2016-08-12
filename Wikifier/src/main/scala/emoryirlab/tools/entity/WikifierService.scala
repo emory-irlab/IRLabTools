@@ -12,6 +12,7 @@ import com.twitter.util.Await
   * Wikification RESTful service.
   */
 object WikifierService extends TwitterServer {
+  val port = flag("port", "8080", "Port to run server on")
 
   val api: Endpoint[Array[EntityMention]] = get("get_entities" :: param("text")) {
     text: String =>
@@ -20,8 +21,7 @@ object WikifierService extends TwitterServer {
   val apiService = api.toService
 
   def main(): Unit = {
-    val server = Http.server.configured(Stats(statsReceiver))
-      .serve(":8081", apiService)
+    val server = Http.server.configured(Stats(statsReceiver)).serve(":" + port(), apiService)
     onExit {
       server.close()
     }
