@@ -14,7 +14,7 @@ import org.apache.lucene.analysis.core.KeywordAnalyzer
 import org.apache.lucene.analysis.en.EnglishAnalyzer
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.index.{DirectoryReader, IndexReader, MultiReader}
-import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.{IndexSearcher, TopDocs}
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.QueryBuilder
 
@@ -27,10 +27,12 @@ object EntitySentenceSearchService extends TwitterServer {
   val port = flag("port", "8081", "Port to run server on")
   val indexes = flag[String]("indexes", "List of index directories to search over")
 
-  def search(searcher: IndexSearcher, queryBuilder: QueryBuilder, text: String): Array[EntityPhrase] = {
-    searcher.search(queryBuilder.createBooleanQuery("phrase", text), 100).scoreDocs map {
+  def search(searchers: Array[IndexSearcher], queryBuilder: QueryBuilder, text: String, topN:Int=100): Array[EntityPhrase] = {
+    val query = queryBuilder.createBooleanQuery("phrase", text)
+    val topDocs = searchers.par.map(_.search(query, topN)).toArray
+    TopDocs.merge(topN, topDocs).scoreDocs map {
       hit =>
-        val doc = searcher.doc(hit.doc)
+        val doc = searchers(hit.shardIndex).doc(hit.doc)
         EntityPhrase(
           doc.get("doc"),
           doc.get("phrase"),
@@ -41,15 +43,14 @@ object EntitySentenceSearchService extends TwitterServer {
 
   def main(): Unit = {
     val directories = indexes().split(",").map(path => FSDirectory.open(FileSystems.getDefault.getPath(path)))
-    val indexReader = new MultiReader(directories.map(dir => DirectoryReader.open(dir).asInstanceOf[IndexReader]), true)
-    val searcher = new IndexSearcher(indexReader)
+    val searchers = directories.map(dir => DirectoryReader.open(dir)).map(new IndexSearcher(_))
     val analyzer = new PerFieldAnalyzerWrapper(
       new KeywordAnalyzer, Map[String, Analyzer]("phrase" -> new EnglishAnalyzer()).asJava)
     val queryBuilder = new QueryBuilder(analyzer)
 
     val api: Endpoint[Array[EntityPhrase]] = get("search" :: param("text")) {
       text: String =>
-        Ok(search(searcher, queryBuilder, text))
+        Ok(search(searchers, queryBuilder, text))
     }
     val apiService = api.toService
 
