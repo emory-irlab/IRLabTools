@@ -12,7 +12,9 @@ import org.apache.lucene.store.FSDirectory
 
 import scala.collection.JavaConverters._
 
-case class EntityPhrase(doc: String, phrase: String, entities: Array[(String, String)])
+case class Entity(name: String, mid: String)
+
+case class EntityPhrase(doc: String, phrase: String, entities: Array[Entity])
 
 /**
   * Created by dsavenk on 7/21/16.
@@ -38,7 +40,7 @@ object EntityPairPhrasesIndexerApp {
         if (fields.size > 2) {
           val doc = fields(0)
           val phrase = fields(1)
-          val entities = fields.slice(2, fields.size).grouped(2).map(e => (e(0), e(1).substring(1).replace("//", "."))).toArray
+          val entities = fields.slice(2, fields.size).grouped(2).map(e => Entity(e(0), e(1).substring(1).replace("/", "."))).toArray
           indexPhrase(writer, EntityPhrase(doc, phrase, entities))
         }
         line = scala.io.StdIn.readLine()
@@ -54,7 +56,7 @@ object EntityPairPhrasesIndexerApp {
     val doc = new Document()
     doc.add(new TextField("phrase", entityPhrase.phrase, Field.Store.YES))
     doc.add(new Field("doc", entityPhrase.doc, StoredField.TYPE))
-    for ((name, mid) <- entityPhrase.entities) {
+    for (Entity(name, mid) <- entityPhrase.entities) {
       doc.add(new Field("mid", mid, StringField.TYPE_STORED))
       doc.add(new TextField("name", name, Field.Store.YES))
     }

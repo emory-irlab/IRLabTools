@@ -2,8 +2,8 @@ package edu.emory.mathcs.ir.tools.webscope
 
 import java.io.{File, PrintWriter}
 
-import edu.emory.mathcs.ir.tools.entity.{EntityMention, TagMeWikifier}
 import edu.emory.mathcs.ir.utils.{AnnotatedQuestion, QuestionUtils}
+import emoryirlab.tools.entity.{EntityMention, Wikifier}
 
 /**
   * Created by dsavenk on 8/4/16.
@@ -20,7 +20,7 @@ object EntityLinkAnswers {
 
   def getQuestionAnswerEntityMentions(question: String, answer: String): (Array[EntityMention], Array[EntityMention]) = {
     val questionWithAnswers = question + "? " + answer
-    val mentions = TagMeWikifier.getEntityMentions(questionWithAnswers)
+    val mentions = Wikifier.getEntityMentions(questionWithAnswers)
     mentions.partition(_.start < question.length)
   }
 

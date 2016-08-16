@@ -1,6 +1,6 @@
 package edu.emory.mathcs.ir.utils
 
-import edu.emory.mathcs.ir.tools.entity.EntityMention
+import emoryirlab.tools.entity.EntityMention
 
 case class AnnotatedQuestion(id: String, question: String,
                              answers: Array[String],
