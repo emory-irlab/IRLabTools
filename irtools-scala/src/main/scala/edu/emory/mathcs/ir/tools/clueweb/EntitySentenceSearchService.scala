@@ -14,7 +14,8 @@ import org.apache.lucene.analysis.core.KeywordAnalyzer
 import org.apache.lucene.analysis.en.EnglishAnalyzer
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.index.{DirectoryReader, IndexReader, MultiReader}
-import org.apache.lucene.search.{IndexSearcher, TopDocs}
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser
+import org.apache.lucene.search.{BooleanClause, BooleanQuery, IndexSearcher, TopDocs}
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.QueryBuilder
 
@@ -27,9 +28,16 @@ object EntitySentenceSearchService extends TwitterServer {
   val port = flag("port", "8081", "Port to run server on")
   val indexes = flag[String]("indexes", "List of index directories to search over")
 
-  def search(searchers: Array[IndexSearcher], queryBuilder: QueryBuilder, text: String, topN:Int=100): Array[EntityPhrase] = {
-    val query = queryBuilder.createBooleanQuery("phrase", text)
-    val topDocs = searchers.par.map(_.search(query, topN)).toArray
+  val DEFAULT_TOPN = 100
+
+  def search(searchers: Array[IndexSearcher],
+             queryParser: MultiFieldQueryParser,
+             text: String,
+             mids: Seq[String],
+             topN: Int): Array[EntityPhrase] = {
+    val queryBuilder = new BooleanQuery.Builder().add(queryParser.createBooleanQuery("phrase", text), BooleanClause.Occur.SHOULD)
+    mids.map(queryParser.createBooleanQuery("mid", _)).foreach(queryBuilder.add(_, BooleanClause.Occur.SHOULD))
+    val topDocs = searchers.par.map(_.search(queryBuilder.build(), topN)).toArray
     TopDocs.merge(topN, topDocs).scoreDocs map {
       hit =>
         val doc = searchers(hit.shardIndex).doc(hit.doc)
@@ -46,12 +54,13 @@ object EntitySentenceSearchService extends TwitterServer {
     val searchers = directories.map(dir => DirectoryReader.open(dir)).map(new IndexSearcher(_))
     val analyzer = new PerFieldAnalyzerWrapper(
       new KeywordAnalyzer, Map[String, Analyzer]("phrase" -> new EnglishAnalyzer()).asJava)
-    val queryBuilder = new QueryBuilder(analyzer)
+    val queryParser = new MultiFieldQueryParser(Array("phrase", "mid"), analyzer)
 
-    val api: Endpoint[Array[EntityPhrase]] = get("search" :: param("text")) {
-      text: String =>
-        Ok(search(searchers, queryBuilder, text))
-    }
+    val api: Endpoint[Array[EntityPhrase]] =
+      get("search" :: param("phrase") :: params("mid") :: paramOption("topn").as[Int]) {
+        (text: String, mids: Seq[String], topN: Option[Int]) =>
+          Ok(search(searchers, queryParser, text, mids, topN.getOrElse(DEFAULT_TOPN)))
+      }
     val apiService = api.toService
 
     val server = Http.server.configured(Stats(statsReceiver)).serve(":" + port(), apiService)
