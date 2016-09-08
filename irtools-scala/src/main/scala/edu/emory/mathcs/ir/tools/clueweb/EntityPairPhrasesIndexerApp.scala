@@ -14,7 +14,7 @@ import scala.collection.JavaConverters._
 
 case class Entity(name: String, mid: String)
 
-case class EntityPhrase(doc: String, phrase: String, entities: Array[Entity])
+case class EntityPhrase(doc: String, phrase: String, entities: Array[Entity], score: Option[Float])
 
 /**
   * Created by dsavenk on 7/21/16.
@@ -41,7 +41,7 @@ object EntityPairPhrasesIndexerApp {
           val doc = fields(0)
           val phrase = fields(1)
           val entities = fields.slice(2, fields.size).grouped(2).map(e => Entity(e(0), e(1).substring(1).replace("/", "."))).toArray
-          indexPhrase(writer, EntityPhrase(doc, phrase, entities))
+          indexPhrase(writer, EntityPhrase(doc, phrase, entities, None))
         }
         line = scala.io.StdIn.readLine()
       }

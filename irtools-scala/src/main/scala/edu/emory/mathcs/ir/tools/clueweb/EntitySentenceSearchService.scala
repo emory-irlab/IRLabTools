@@ -36,7 +36,7 @@ object EntitySentenceSearchService extends TwitterServer {
              mids: Seq[String],
              topN: Int): Array[EntityPhrase] = {
     val queryBuilder = new BooleanQuery.Builder().add(queryParser.createBooleanQuery("phrase", text), BooleanClause.Occur.SHOULD)
-    mids.map(queryParser.createBooleanQuery("mid", _)).foreach(queryBuilder.add(_, BooleanClause.Occur.SHOULD))
+    mids.map(queryParser.createBooleanQuery("mid", _)).foreach(queryBuilder.add(_, BooleanClause.Occur.MUST))
     val topDocs = searchers.par.map(_.search(queryBuilder.build(), topN)).toArray
     TopDocs.merge(topN, topDocs).scoreDocs map {
       hit =>
@@ -44,7 +44,8 @@ object EntitySentenceSearchService extends TwitterServer {
         EntityPhrase(
           doc.get("doc"),
           doc.get("phrase"),
-          doc.getValues("name").zip(doc.getValues("mid")).map(nameMid => Entity(nameMid._1, nameMid._2))
+          doc.getValues("name").zip(doc.getValues("mid")).map(nameMid => Entity(nameMid._1, nameMid._2)),
+          Some(hit.score)
         )
     }
   }
