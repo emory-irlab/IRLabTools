@@ -14,7 +14,7 @@ import scala.io.Source
   */
 object ExtractSnippetsApp {
   def main(args: Array[String]): Unit = {
-    val keys = Array("PUT YOUR BING API KEYS HERE")
+    val keys = Array("ua4NbbaJUUabS47ZzGM2VANoW3s+EdogrHxbtRRsg1Y","qaiWmCHnf0KlqvRinysEmXYAmXrV51+K1M/YiDmPBa0","z7GKui/JBAa9bhG5VGkEeQJkdy5bH5womhPpNotNJvE","CN2AJN4aIJhnC7T3Bb1eAKS59zPSqS6xAalt3kBtq3o")
     var currentKeyIndex = 0
 
     val pw = new PrintWriter(new File(args(1)))

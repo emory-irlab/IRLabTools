@@ -80,8 +80,9 @@ object ExtractRelevantSentencesApp {
                                 searchResults: SearchResults,
                                 minSentenceLength: Int = 30,
                                 maxSentenceLength: Int = 400,
-                                topN: Int = 100): QuerySentences = {
-    val snippetLemmas = searchResults.searchResults.map(res => s"${res.title}. ${res.snippet}").flatMap(getLemmas)
+                                topN: Int = 1000,
+                                includeSnippetLemmas: Boolean = true): QuerySentences = {
+    val snippetLemmas = if (includeSnippetLemmas) searchResults.searchResults.map(res => s"${res.title}. ${res.snippet}").flatMap(getLemmas) else Nil
     val queryLemmas = getLemmas(searchResults.query)
     val queryWordVector = (queryLemmas ++ snippetLemmas).groupBy(identity).mapValues(_.size)
 
@@ -116,12 +117,25 @@ object ExtractRelevantSentencesApp {
       case Array(url, path) => url -> path
     }.toMap
 
-    val searchResults = decode[List[SearchResults]](scala.io.Source.fromFile(args(0)).mkString).right.get
+    val searchResults = parseSearchResults(searchResultsFile)
     val searchSentences = searchResults.map(results => getQueryRelevantSentences(urlPathMap, results)).asJson
 
     val writer = new PrintWriter(outFile)
     writer.write(searchSentences.asJson.spaces2)
     writer.close()
+  }
+
+  private def parseSearchResultsOld(inputPath: String) = {
+    decode[List[SearchResults]](scala.io.Source.fromFile(inputPath).mkString).right.get
+  }
+
+  private def parseSearchResults(inputPath: String): List[SearchResults] = {
+    val res = decode[List[QuestionWithSearchResults]](scala.io.Source.fromFile(inputPath).mkString).right.get
+
+    res.map(qsr => SearchResults(qsr.question, qsr.search_results.zipWithIndex.map {
+      case (nbsr, rank) => SearchResult(rank, nbsr.url, nbsr.name, nbsr.snippet)
+    }
+    ))
   }
 
 }

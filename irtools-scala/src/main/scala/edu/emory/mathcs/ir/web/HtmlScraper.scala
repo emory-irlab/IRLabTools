@@ -26,7 +26,7 @@ object HtmlScraper {
 
   def getAsync(requestUrl: String): Future[String] = {
     try {
-      Http(url(requestUrl) OK as.String) recover {
+      http(url(requestUrl) OK as.String) recover {
         case exc => System.err.println(exc.getMessage)
           ""
       }
